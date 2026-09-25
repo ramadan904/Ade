@@ -75,6 +75,44 @@
   .card a.link:hover { text-decoration: underline; }
   .row { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
   .deadline { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+  .header-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .btn {
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 9px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .btn.ghost { background: transparent; color: var(--text); border-color: var(--border); }
+  .btn:disabled { opacity: 0.6; cursor: wait; }
+  .wallet-dialog {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+    width: min(420px, calc(100vw - 32px));
+  }
+  .wallet-dialog::backdrop { background: rgba(0,0,0,0.6); }
+  .wallet-dialog h3 { margin: 0 0 4px; }
+  .wallet-dialog .desc { color: var(--muted); font-size: 0.9rem; margin: 0 0 16px; }
+  .wallet-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .wallet-list li {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  }
+  .wallet-list .status { color: var(--muted); font-size: 0.78rem; display: block; }
+  .wallet-error { color: #ff6b6b; font-size: 0.85rem; min-height: 1.2em; margin: 12px 0 0; }
+  .dialog-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
   footer {
     margin-top: 56px;
     padding-top: 20px;
@@ -87,10 +125,23 @@
 <body>
 <div class="wrap">
 
-  <header>
-    <h1>Devpost Weekly Newsletter Summary</h1>
-    <p>Winner spotlights, resources, and the hackathons worth your time this week.</p>
+  <header class="header-row">
+    <div>
+      <h1>Devpost Weekly Newsletter Summary</h1>
+      <p>Winner spotlights, resources, and the hackathons worth your time this week.</p>
+    </div>
+    <button type="button" class="btn" id="wallet-btn">Connect Solana Wallet</button>
   </header>
+
+  <dialog class="wallet-dialog" id="wallet-dialog">
+    <h3>Solana wallet</h3>
+    <p class="desc">Connect a browser extension wallet, or install one to get started.</p>
+    <ul class="wallet-list" id="wallet-list"></ul>
+    <p class="wallet-error" id="wallet-error" role="alert"></p>
+    <div class="dialog-actions">
+      <button type="button" class="btn ghost" id="wallet-close">Close</button>
+    </div>
+  </dialog>
 
   <h2 class="section-title">Winner Spotlights</h2>
 
@@ -175,5 +226,120 @@
   </footer>
 
 </div>
+<script>
+(() => {
+  // Solana browser-extension wallets. Each extension injects a provider on
+  // window once installed; if it's missing we link to the official install page.
+  const WALLETS = [
+    {
+      name: "Phantom",
+      install: "https://phantom.com/download",
+      mobile: (url) => `https://phantom.app/ul/browse/${encodeURIComponent(url)}?ref=${encodeURIComponent(location.origin)}`,
+      provider: () => (window.phantom && window.phantom.solana && window.phantom.solana.isPhantom) ? window.phantom.solana : null,
+    },
+    {
+      name: "Solflare",
+      install: "https://solflare.com/download",
+      mobile: (url) => `https://solflare.com/ul/v1/browse/${encodeURIComponent(url)}?ref=${encodeURIComponent(location.origin)}`,
+      provider: () => (window.solflare && window.solflare.isSolflare) ? window.solflare : null,
+    },
+    {
+      name: "Backpack",
+      install: "https://backpack.app/download",
+      mobile: null,
+      provider: () => (window.backpack && window.backpack.solana) ? window.backpack.solana : null,
+    },
+  ];
+
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const btn = document.getElementById("wallet-btn");
+  const dialog = document.getElementById("wallet-dialog");
+  const list = document.getElementById("wallet-list");
+  const errorEl = document.getElementById("wallet-error");
+  let active = null; // { wallet, provider, address }
+
+  const short = (a) => `${a.slice(0, 4)}…${a.slice(-4)}`;
+
+  function renderButton() {
+    btn.textContent = active ? `${active.wallet.name}: ${short(active.address)}` : "Connect Solana Wallet";
+    btn.title = active ? `${active.address} (click to disconnect)` : "";
+  }
+
+  function renderList() {
+    list.replaceChildren();
+    for (const wallet of WALLETS) {
+      const li = document.createElement("li");
+      const label = document.createElement("div");
+      const installed = !!wallet.provider();
+      label.innerHTML = `<strong></strong><span class="status"></span>`;
+      label.querySelector("strong").textContent = wallet.name;
+      label.querySelector(".status").textContent = installed ? "Detected" : "Not installed";
+
+      let action;
+      if (installed) {
+        action = document.createElement("button");
+        action.type = "button";
+        action.className = "btn";
+        action.textContent = "Connect";
+        action.addEventListener("click", () => connect(wallet, action));
+      } else {
+        action = document.createElement("a");
+        action.className = "btn ghost";
+        action.target = "_blank";
+        action.rel = "noopener";
+        if (isMobile && wallet.mobile) {
+          action.href = wallet.mobile(location.href);
+          action.textContent = "Open in app";
+        } else {
+          action.href = wallet.install;
+          action.textContent = "Install";
+        }
+      }
+      li.append(label, action);
+      list.append(li);
+    }
+  }
+
+  async function connect(wallet, el) {
+    errorEl.textContent = "";
+    const provider = wallet.provider();
+    if (!provider) return renderList();
+    el.disabled = true;
+    try {
+      const res = await provider.connect();
+      const key = (res && res.publicKey) || provider.publicKey;
+      active = { wallet, provider, address: key.toString() };
+      if (provider.on) {
+        provider.on("disconnect", () => { active = null; renderButton(); });
+        provider.on("accountChanged", (pk) => {
+          if (pk && active) { active.address = pk.toString(); renderButton(); }
+        });
+      }
+      renderButton();
+      dialog.close();
+    } catch (err) {
+      errorEl.textContent = (err && err.message) || "Connection was rejected.";
+    } finally {
+      el.disabled = false;
+    }
+  }
+
+  btn.addEventListener("click", async () => {
+    if (active) {
+      try { await active.provider.disconnect(); } catch (_) {}
+      active = null;
+      renderButton();
+      return;
+    }
+    errorEl.textContent = "";
+    renderList();
+    dialog.showModal();
+  });
+  document.getElementById("wallet-close").addEventListener("click", () => dialog.close());
+
+  // Extensions can inject after load; refresh detection once the page settles.
+  window.addEventListener("load", () => setTimeout(() => { if (dialog.open) renderList(); }, 300));
+})();
+</script>
 </body>
 </html>
