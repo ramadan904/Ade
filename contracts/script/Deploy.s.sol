@@ -63,9 +63,14 @@ contract Deploy is Script {
         _write(usd, address(market), address(factory), keeper, stocks, mockStocks);
     }
 
-    function _write(address usd, address market, address factory, address keeper, address[] memory stocks, bool mock)
-        internal
-    {
+    function _write(
+        address usd,
+        address market,
+        address factory,
+        address keeper,
+        address[] memory stocks,
+        bool mock
+    ) internal {
         string memory tokens = "tokens";
         string memory list;
         for (uint256 i; i < stocks.length; ++i) {
@@ -82,7 +87,8 @@ contract Deploy is Script {
         vm.serializeBool(root, "testTokens", mock);
         string memory json = vm.serializeString(root, "stocks", list);
 
-        string memory path = string.concat(vm.projectRoot(), "/deployments/", vm.toString(block.chainid), ".json");
+        string memory path =
+            string.concat(vm.projectRoot(), "/deployments/", vm.toString(block.chainid), ".json");
         vm.writeJson(json, path);
         console.log("factory", factory);
         console.log("market ", market);

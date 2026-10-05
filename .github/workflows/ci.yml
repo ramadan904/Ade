@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Contracts - format, build, test
+        working-directory: contracts
+        run: |
+          forge fmt --check
+          forge build
+          forge test -vv
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: agent/package-lock.json
+
+      - name: Agent - install
+        working-directory: agent
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Agent - typecheck
+        working-directory: agent
+        run: npm run typecheck
+
+      - name: Web bundle is up to date
+        working-directory: agent
+        run: |
+          npm run build:web
+          git diff --exit-code ../web/vendor/lib.js
+
+      - name: Agent - unit, end-to-end and browser tests
+        working-directory: agent
+        run: npm test
+
+      - name: Deployment file is reproducible
+        run: git diff --exit-code contracts/deployments/31337.json

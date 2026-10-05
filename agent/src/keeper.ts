@@ -77,7 +77,8 @@ async function main() {
       .filter((q) => q.price > 0n)
       .map((q) => {
         const bps = BigInt(Math.round((Math.random() * 2 - 1) * 150));
-        return { ...q, price: (q.price * (10_000n + bps)) / 10_000n };
+        const cent = 1_000_000n; // one cent with 8 price decimals
+        return { ...q, price: (((q.price * (10_000n + bps)) / 10_000n) / cent) * cent };
       });
     await post(moved);
     await new Promise((r) => setTimeout(r, Number(values.every) * 1000));
