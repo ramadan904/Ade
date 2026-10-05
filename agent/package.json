@@ -8,8 +8,9 @@
     "agent": "tsx src/run.ts",
     "keeper": "tsx src/keeper.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test test/*.test.ts",
-    "create-vault": "tsx src/create-vault.ts"
+    "test": "node --import tsx --test --test-concurrency=1 test/*.test.ts",
+    "create-vault": "tsx src/create-vault.ts",
+    "build:web": "esbuild src/web-lib.ts --bundle --format=esm --minify --target=es2022 --outfile=../web/vendor/lib.js"
   },
   "engines": {
     "node": ">=20"
@@ -22,6 +23,8 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
+    "esbuild": "^0.28.2",
+    "playwright": "1.56",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
